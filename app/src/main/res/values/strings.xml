@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">自动刷学时插件</string>
+    <string name="accessibility_service_description">用于自动点击开始学习按钮并切换视频</string>
+    <string name="service_status">服务状态</string>
+    <string name="service_enabled">已启用</string>
+    <string name="service_disabled">未启用</string>
+    <string name="enable_service">启用服务</string>
+    <string name="open_settings">打开无障碍设置</string>
+    <string name="service_description">本插件可以自动检测视频播放完成后的弹窗，并自动点击"开始学习"按钮切换到下一个视频。</string>
+    <string name="instructions">使用说明：\n1. 点击"打开无障碍设置"按钮\n2. 找到"自动刷学时插件"\n3. 开启服务\n4. 返回应用，开始刷学时</string>
+</resources>
+
