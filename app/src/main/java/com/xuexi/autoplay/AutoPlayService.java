@@ -55,60 +55,142 @@ public class AutoPlayService extends AccessibilityService {
      * 检查并点击"开始学习"按钮
      */
     private void checkAndClickStartLearningButton() {
-        AccessibilityNodeInfo rootNode = getRootInActiveWindow();
-        if (rootNode == null) {
-            Log.d(TAG, "Root node is null");
-            return;
-        }
+        // 增加等待时间，确保弹窗完全加载
+        handler.postDelayed(() -> {
+            AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                Log.d(TAG, "Root node is null");
+                return;
+            }
 
-        try {
-            // 查找包含"开始学习"文本的节点
-            List<AccessibilityNodeInfo> nodes = rootNode.findAccessibilityNodeInfosByText(BUTTON_TEXT_START_LEARNING);
-            
-            if (nodes != null && !nodes.isEmpty()) {
-                for (AccessibilityNodeInfo node : nodes) {
-                    // 检查节点是否可点击
-                    if (node.isClickable() || node.getParent() != null && node.getParent().isClickable()) {
-                        AccessibilityNodeInfo clickableNode = node.isClickable() ? node : node.getParent();
+            try {
+                Log.d(TAG, "开始查找'开始学习'按钮");
+                
+                // 策略1: 直接查找包含"开始学习"文本的节点（支持弹窗）
+                List<AccessibilityNodeInfo> nodes = rootNode.findAccessibilityNodeInfosByText(BUTTON_TEXT_START_LEARNING);
+                
+                if (nodes != null && !nodes.isEmpty()) {
+                    Log.d(TAG, "找到包含'开始学习'文本的节点数量: " + nodes.size());
+                    for (AccessibilityNodeInfo node : nodes) {
+                        // 获取节点的详细信息用于调试
+                        Log.d(TAG, "节点文本: " + node.getText() + ", 可点击: " + node.isClickable() + ", 父节点可点击: " + (node.getParent() != null && node.getParent().isClickable()));
                         
-                        if (clickableNode != null) {
-                            // 防止频繁点击
-                            long currentTime = System.currentTimeMillis();
-                            if (currentTime - lastClickTime < CLICK_DELAY_MS * 2) {
-                                Log.d(TAG, "Click too frequent, skipping");
-                                continue;
-                            }
+                        // 检查节点是否可点击
+                        if (node.isClickable() || node.getParent() != null && node.getParent().isClickable()) {
+                            AccessibilityNodeInfo clickableNode = node.isClickable() ? node : node.getParent();
                             
-                            Log.d(TAG, "Found '开始学习' button, attempting to click");
-                            
-                            // 尝试点击
-                            boolean clicked = performClick(clickableNode);
-                            
-                            if (clicked) {
-                                lastClickTime = currentTime;
-                                Log.d(TAG, "Successfully clicked '开始学习' button");
+                            if (clickableNode != null) {
+                                // 防止频繁点击
+                                long currentTime = System.currentTimeMillis();
+                                if (currentTime - lastClickTime < CLICK_DELAY_MS * 2) {
+                                    Log.d(TAG, "点击过于频繁，跳过");
+                                    continue;
+                                }
                                 
-                                // 点击后延迟一段时间，等待下一个视频加载
-                                handler.postDelayed(() -> {
-                                    // 可以在这里添加切换到下一个视频的逻辑
-                                    // 例如：查找下一个视频按钮并点击
-                                    findAndClickNextVideo();
-                                }, 1000);
+                                Log.d(TAG, "找到可点击的'开始学习'按钮，尝试点击");
                                 
-                                break;
+                                // 尝试点击
+                                boolean clicked = performClick(clickableNode);
+                                
+                                if (clicked) {
+                                    lastClickTime = currentTime;
+                                    Log.d(TAG, "成功点击'开始学习'按钮");
+                                    
+                                    // 点击后延迟一段时间，等待下一个视频加载
+                                    handler.postDelayed(() -> {
+                                        findAndClickNextVideo();
+                                    }, 1000);
+                                    
+                                    break;
+                                }
                             }
                         }
                     }
+                } else {
+                    Log.d(TAG, "未找到包含'开始学习'文本的节点，尝试其他查找策略");
+                    
+                    // 策略2: 查找弹窗容器，然后在弹窗内查找按钮
+                    findInDialog(rootNode);
+                    
+                    // 策略3: 通过类名查找按钮
+                    findButtonByClassName(rootNode);
+                    
+                    // 策略4: 递归查找所有可点击节点
+                    findClickableNodes(rootNode);
                 }
-            } else {
-                // 如果没找到文本，尝试通过其他方式查找按钮
-                findButtonByClassName(rootNode);
+            } catch (Exception e) {
+                Log.e(TAG, "checkAndClickStartLearningButton 方法出错", e);
+            } finally {
+                rootNode.recycle();
+            }
+        }, 500); // 增加延迟，确保弹窗完全显示
+    }
+    
+    /**
+     * 在弹窗中查找并点击"开始学习"按钮
+     */
+    private void findInDialog(AccessibilityNodeInfo rootNode) {
+        try {
+            // 查找可能是弹窗的容器（通常是Dialog或PopupWindow）
+            List<AccessibilityNodeInfo> dialogNodes = new ArrayList<>();
+            
+            // 遍历所有节点，寻找弹窗特征
+            traverseNodes(rootNode, node -> {
+                // 弹窗通常有较高的层级和特定的类名
+                String className = node.getClassName().toString();
+                if (className.contains("Dialog") || className.contains("PopupWindow") || 
+                    className.contains("FrameLayout") || className.contains("LinearLayout")) {
+                    dialogNodes.add(node);
+                }
+            });
+            
+            Log.d(TAG, "找到可能是弹窗的节点数量: " + dialogNodes.size());
+            
+            // 在每个弹窗中查找"开始学习"按钮
+            for (AccessibilityNodeInfo dialog : dialogNodes) {
+                List<AccessibilityNodeInfo> buttonsInDialog = dialog.findAccessibilityNodeInfosByText(BUTTON_TEXT_START_LEARNING);
+                if (buttonsInDialog != null && !buttonsInDialog.isEmpty()) {
+                    Log.d(TAG, "在弹窗中找到'开始学习'按钮");
+                    for (AccessibilityNodeInfo button : buttonsInDialog) {
+                        performClick(button);
+                        break;
+                    }
+                    break;
+                }
             }
         } catch (Exception e) {
-            Log.e(TAG, "Error in checkAndClickStartLearningButton", e);
-        } finally {
-            rootNode.recycle();
+            Log.e(TAG, "findInDialog 方法出错", e);
         }
+    }
+    
+    /**
+     * 遍历所有节点并执行回调
+     */
+    private void traverseNodes(AccessibilityNodeInfo node, NodeCallback callback) {
+        if (node == null) {
+            return;
+        }
+        
+        try {
+            callback.onNode(node);
+            
+            for (int i = 0; i < node.getChildCount(); i++) {
+                AccessibilityNodeInfo child = node.getChild(i);
+                if (child != null) {
+                    traverseNodes(child, callback);
+                    child.recycle();
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "遍历节点出错", e);
+        }
+    }
+    
+    /**
+     * 节点回调接口
+     */
+    private interface NodeCallback {
+        void onNode(AccessibilityNodeInfo node);
     }
 
     /**
